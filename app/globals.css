@@ -1,8 +1,69 @@
 @import "tailwindcss";
 
+/* ── Saathi design tokens ─────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Backgrounds */
+  --bg-base:       #f5f3ef;   /* warm off-white */
+  --bg-surface:    #ffffff;
+  --bg-surface-2:  #ede9e2;
+  --bg-muted:      #f0eeea;
+
+  /* Brand: muted teal-blue */
+  --color-brand:      #4a8fa8;
+  --color-brand-soft: #d4eaf2;
+  --color-brand-dark: #2e6b80;
+
+  /* Text */
+  --color-text:        #2c2c2c;
+  --color-text-soft:   #5a5a5a;
+  --color-text-muted:  #8a8a8a;
+  --color-text-invert: #ffffff;
+
+  /* Accents */
+  --color-accent:  #e8a87c;   /* warm terracotta */
+  --color-success: #6aaa82;   /* muted green */
+
+  /* Crisis RED — used ONLY in CrisisBanner */
+  --color-crisis: #c0392b;
+  --color-crisis-bg: #fdf0ee;
+
+  /* Surfaces */
+  --shadow-card:  0 2px 12px rgba(0,0,0,0.07);
+  --radius-card:  1rem;
+  --radius-btn:   0.75rem;
+
+  /* Foreground alias for Tailwind */
+  --background: var(--bg-base);
+  --foreground: var(--color-text);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-base:       #1a1916;
+    --bg-surface:    #222220;
+    --bg-surface-2:  #2a2926;
+    --bg-muted:      #2e2d2a;
+
+    --color-brand:      #5fa9c6;
+    --color-brand-soft: #1e3f4e;
+    --color-brand-dark: #7fc4de;
+
+    --color-text:        #e8e5de;
+    --color-text-soft:   #b0ada5;
+    --color-text-muted:  #6e6b63;
+    --color-text-invert: #1a1916;
+
+    --color-accent:  #d4936a;
+    --color-success: #5a9a70;
+
+    --color-crisis: #e55a50;
+    --color-crisis-bg: #2e1a19;
+
+    --shadow-card: 0 2px 12px rgba(0,0,0,0.3);
+
+    --background: var(--bg-base);
+    --foreground: var(--color-text);
+  }
 }
 
 @theme inline {
@@ -12,15 +73,70 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── Base resets ───────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-base);
+  color: var(--color-text);
+  font-family: var(--font-sans, 'Geist', Arial, Helvetica, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.6;
+}
+
+/* ── Focus ring for accessibility ─────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Utility: card surface ─────────────────────────────────────────── */
+.card {
+  background: var(--bg-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem;
+}
+
+/* ── Skeleton shimmer ──────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-muted) 25%,
+    var(--bg-surface-2) 50%,
+    var(--bg-muted) 75%
+  );
+  background-size: 400px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+
+/* ── Breathing animation (box-breathing modal) ─────────────────────── */
+@keyframes breathe {
+  0%,100% { transform: scale(1);   opacity: 0.7; }
+  50%      { transform: scale(1.2); opacity: 1;   }
+}
+
+.breathe-circle {
+  animation: breathe 4s ease-in-out infinite;
 }
