@@ -14,6 +14,7 @@ A generic version of this is a chatbot plus a mood slider. Saathi's wedge — al
 - **Adaptive, grounded coping.** Coping techniques are *retrieved* from a curated, sourced library (box breathing, 5-4-3-2-1 grounding, cognitive reframing, and more). The model personalizes the framing; it never invents clinical advice.
 - **Evidence-grounded reframe.** When a student catastrophizes, the companion answers with a gentle reframe tied to what they actually wrote.
 - **Safety first.** A fail-safe crisis check surfaces real, verified government helplines instead of false reassurance.
+- **Proactive, not just reactive.** A clearly-labelled *demo wearable simulator* shows how a real Apple Watch / Google Fit signal would let Saathi reach out first: a simulated heart-rate spike triggers a real GenAI check-in that fuses the signal with the student's context. Only the sensor is simulated — the AI response is a real API call, and the UI says so.
 
 ---
 
