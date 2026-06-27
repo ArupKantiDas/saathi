@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Helpline } from '@/lib/knowledge/helplines';
 import CrisisBanner from './CrisisBanner';
+import VoiceButton from './VoiceButton';
+import { useSpeechToText, useTextToSpeech } from '@/lib/voice/useSpeech';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -36,11 +38,26 @@ export default function Chat({ exam, getToken, recentContext }: ChatProps) {
   const [crisis, setCrisis] = useState(false);
   const [crisisHelplines, setCrisisHelplines] = useState<Helpline[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const stt = useSpeechToText();
+  const tts = useTextToSpeech();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // Append transcript to chat input when STT stops
+  useEffect(() => {
+    if (!stt.listening && stt.transcript) {
+      setInput((prev) => {
+        const spacer = prev && !prev.endsWith(' ') ? ' ' : '';
+        return prev + spacer + stt.transcript;
+      });
+      stt.reset();
+    }
+  }, [stt.listening, stt.transcript, stt.reset]);
 
   const send = async () => {
     const trimmed = input.trim();
@@ -93,6 +110,32 @@ export default function Chat({ exam, getToken, recentContext }: ChatProps) {
     }
   };
 
+  const handleVoiceToggle = () => {
+    if (stt.listening) {
+      stt.stop();
+    } else {
+      stt.start();
+    }
+  };
+
+  const handleSpeakToggle = (content: string, index: number) => {
+    if (speakingIndex === index && tts.speaking) {
+      tts.stop();
+      setSpeakingIndex(null);
+    } else {
+      tts.stop();
+      setSpeakingIndex(index);
+      tts.speak(content);
+    }
+  };
+
+  // Clear speakingIndex when TTS finishes
+  useEffect(() => {
+    if (!tts.speaking) {
+      setSpeakingIndex(null);
+    }
+  }, [tts.speaking]);
+
   return (
     <div className="flex flex-col gap-3">
       {/* Crisis */}
@@ -127,6 +170,47 @@ export default function Chat({ exam, getToken, recentContext }: ChatProps) {
               }}
             >
               {msg.content}
+
+              {/* Read aloud button for assistant messages */}
+              {msg.role === 'assistant' && tts.supported && (
+                <button
+                  type="button"
+                  onClick={() => handleSpeakToggle(msg.content, i)}
+                  aria-label={
+                    speakingIndex === i && tts.speaking
+                      ? 'Stop reading aloud'
+                      : 'Read this message aloud'
+                  }
+                  aria-pressed={speakingIndex === i && tts.speaking}
+                  className="mt-2 flex items-center gap-1 text-xs"
+                  style={{
+                    color: 'var(--color-text-muted)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px 0',
+                  }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    width="12"
+                    height="12"
+                    aria-hidden="true"
+                  >
+                    {speakingIndex === i && tts.speaking ? (
+                      <>
+                        <rect x="6" y="5" width="4" height="14" rx="1" />
+                        <rect x="14" y="5" width="4" height="14" rx="1" />
+                      </>
+                    ) : (
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
+                    )}
+                  </svg>
+                  {speakingIndex === i && tts.speaking ? 'Stop' : 'Read aloud'}
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -154,6 +238,18 @@ export default function Chat({ exam, getToken, recentContext }: ChatProps) {
         <div ref={bottomRef} />
       </div>
 
+      {/* Live transcript hint */}
+      {stt.listening && stt.transcript && (
+        <p
+          className="text-xs italic"
+          style={{ color: 'var(--color-text-muted)' }}
+          aria-live="polite"
+          aria-label="Live transcript"
+        >
+          {stt.transcript}
+        </p>
+      )}
+
       {/* Error */}
       {error && (
         <div
@@ -171,6 +267,15 @@ export default function Chat({ exam, getToken, recentContext }: ChatProps) {
         role="form"
         aria-label="Send a message"
       >
+        {/* Mic button — hidden if STT not supported */}
+        {stt.supported && (
+          <VoiceButton
+            listening={stt.listening}
+            onToggle={handleVoiceToggle}
+            label={stt.listening ? 'Stop voice input' : 'Dictate message'}
+          />
+        )}
+
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}

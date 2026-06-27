@@ -2,12 +2,15 @@
 
 import type { Analysis } from '@/lib/ai/schemas';
 import type { Technique } from '@/lib/knowledge/techniques';
+import TechniqueFeedback from './TechniqueFeedback';
+import { useTextToSpeech } from '@/lib/voice/useSpeech';
 
 interface AnalysisCardProps {
   analysis: Analysis;
   technique: Technique;
   provider: 'gemini' | 'bedrock' | 'none';
   degraded: boolean;
+  uid?: string;
 }
 
 const MOOD_EMOJI: Record<number, string> = {
@@ -40,7 +43,10 @@ export default function AnalysisCard({
   technique,
   provider,
   degraded,
+  uid,
 }: AnalysisCardProps) {
+  const tts = useTextToSpeech();
+
   return (
     <div
       aria-live="polite"
@@ -69,12 +75,63 @@ export default function AnalysisCard({
         className="card"
         style={{ borderLeft: '4px solid var(--color-brand)' }}
       >
-        <p
-          className="text-base leading-relaxed"
-          style={{ color: 'var(--color-text)' }}
-        >
-          {analysis.supportiveMessage}
-        </p>
+        <div className="flex items-start gap-2">
+          <p
+            className="text-base leading-relaxed flex-1"
+            style={{ color: 'var(--color-text)' }}
+          >
+            {analysis.supportiveMessage}
+          </p>
+
+          {/* Read aloud button — hidden if TTS not supported */}
+          {tts.supported && (
+            <button
+              type="button"
+              onClick={() =>
+                tts.speaking
+                  ? tts.stop()
+                  : tts.speak(analysis.supportiveMessage)
+              }
+              aria-label={tts.speaking ? 'Stop reading aloud' : 'Read message aloud'}
+              aria-pressed={tts.speaking}
+              className="shrink-0 flex items-center justify-center rounded-full"
+              style={{
+                width: '36px',
+                height: '36px',
+                background: tts.speaking
+                  ? 'var(--color-brand-soft)'
+                  : 'transparent',
+                color: tts.speaking
+                  ? 'var(--color-brand-dark)'
+                  : 'var(--color-text-muted)',
+                border: '1.5px solid var(--bg-surface-2)',
+                cursor: 'pointer',
+              }}
+            >
+              {/* Speaker SVG icon */}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                width="16"
+                height="16"
+                aria-hidden="true"
+              >
+                {tts.speaking ? (
+                  /* Pause bars when speaking */
+                  <>
+                    <rect x="6" y="5" width="4" height="14" rx="1" />
+                    <rect x="14" y="5" width="4" height="14" rx="1" />
+                  </>
+                ) : (
+                  /* Speaker icon */
+                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
+                )}
+              </svg>
+            </button>
+          )}
+        </div>
+
         {/* Detected mood row */}
         <div className="flex items-center gap-2 mt-3">
           <span aria-hidden="true" style={{ fontSize: '1.4rem' }}>
@@ -182,6 +239,11 @@ export default function AnalysisCard({
         >
           Learn more ↗
         </a>
+
+        {/* Feedback widget — only when uid is available */}
+        {uid && (
+          <TechniqueFeedback uid={uid} techniqueId={technique.id} />
+        )}
       </div>
 
       {/* Reframe */}

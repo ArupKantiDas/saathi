@@ -77,3 +77,63 @@ export async function loadExam(uid: string): Promise<string | null> {
   }
   return null;
 }
+
+// ── Technique ratings ────────────────────────────────────────────────
+
+export interface TechniqueRating {
+  techniqueId: string;
+  helpful: number;
+  somewhat: number;
+  no: number;
+  lastRating: string; // 'helpful' | 'somewhat' | 'no'
+  updatedAt: number;
+}
+
+/**
+ * Increment the rating counter for a technique.
+ * Stored at users/{uid}/techniqueRatings/{techniqueId}
+ */
+export async function rateTechnique(
+  uid: string,
+  techniqueId: string,
+  rating: 'helpful' | 'somewhat' | 'no',
+): Promise<void> {
+  const ratingDocRef = doc(db, 'users', uid, 'techniqueRatings', techniqueId);
+  const snap = await getDoc(ratingDocRef);
+
+  const existing: Partial<TechniqueRating> = snap.exists()
+    ? (snap.data() as TechniqueRating)
+    : {};
+
+  const updated: TechniqueRating = {
+    techniqueId,
+    helpful:   (existing.helpful   ?? 0) + (rating === 'helpful'  ? 1 : 0),
+    somewhat:  (existing.somewhat  ?? 0) + (rating === 'somewhat' ? 1 : 0),
+    no:        (existing.no        ?? 0) + (rating === 'no'       ? 1 : 0),
+    lastRating: rating,
+    updatedAt: Date.now(),
+  };
+
+  await setDoc(ratingDocRef, updated, { merge: true });
+}
+
+/**
+ * Return technique ids that the user found most helpful (Yes/Somewhat),
+ * sorted by score descending.
+ */
+export async function topHelpfulTechniqueIds(uid: string): Promise<string[]> {
+  const colRef = collection(db, 'users', uid, 'techniqueRatings');
+  const snapshot = await getDocs(colRef);
+
+  const scored = snapshot.docs
+    .map((d) => {
+      const data = d.data() as TechniqueRating;
+      // Weight: helpful=2, somewhat=1
+      const score = (data.helpful ?? 0) * 2 + (data.somewhat ?? 0);
+      return { id: data.techniqueId, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  return scored.map((item) => item.id);
+}

@@ -30,7 +30,7 @@ export default function AppShell({ exam, uid, getToken }: AppShellProps) {
             <TodayTab exam={exam} uid={uid} getToken={getToken} />
           )}
           {tab === 'you' && (
-            <StressFingerprint uid={uid} />
+            <StressFingerprint uid={uid} getToken={getToken} />
           )}
           {tab === 'calm' && (
             <CalmTab />

@@ -1,11 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AnalysisCard from './AnalysisCard';
 import AnalysisSkeleton from './AnalysisSkeleton';
 import CrisisBanner from './CrisisBanner';
+import VoiceButton from './VoiceButton';
 import Chat from './Chat';
-import { addEntry } from '@/lib/store';
+import { addEntry, listEntries, topHelpfulTechniqueIds } from '@/lib/store';
+import { useSpeechToText } from '@/lib/voice/useSpeech';
+import { getTechnique } from '@/lib/knowledge/techniques';
 import type { Analysis } from '@/lib/ai/schemas';
 import type { Technique } from '@/lib/knowledge/techniques';
 import type { Helpline } from '@/lib/knowledge/helplines';
@@ -44,22 +47,72 @@ const MOOD_LABELS: Record<number, string> = {
 };
 
 const CHAR_LIMIT = 1500;
+const RECENT_CONTEXT_CHAR_LIMIT = 1400;
+
+// ── Build recentContext from history + helpful techniques ─────────────
+
+async function buildRecentContext(uid: string): Promise<string> {
+  const [entries, helpfulIds] = await Promise.all([
+    listEntries(uid),
+    topHelpfulTechniqueIds(uid),
+  ]);
+
+  const parts: string[] = [];
+
+  // Themes from the last ~5 entries
+  const recent = entries.slice(0, 5);
+  const themes = recent
+    .flatMap((e) => e.analysis?.themes ?? [])
+    .filter(Boolean);
+  const uniqueThemes = [...new Set(themes)].slice(0, 8);
+  if (uniqueThemes.length > 0) {
+    parts.push(`Recent themes from this student's journal: ${uniqueThemes.join(', ')}.`);
+  }
+
+  // Techniques the user found helpful
+  if (helpfulIds.length > 0) {
+    const names = helpfulIds
+      .slice(0, 4)
+      .map((id) => getTechnique(id)?.name)
+      .filter(Boolean) as string[];
+    if (names.length > 0) {
+      parts.push(`Techniques that have helped this student before: ${names.join(', ')}.`);
+    }
+  }
+
+  const combined = parts.join(' ');
+  return combined.slice(0, RECENT_CONTEXT_CHAR_LIMIT);
+}
 
 // ── Main component ────────────────────────────────────────────────────
 
 export default function TodayTab({ exam, uid, getToken }: TodayTabProps) {
   // Form state
-  const [text, setText]         = useState('');
-  const [mood, setMood]         = useState<number>(5);
+  const [text, setText]           = useState('');
+  const [mood, setMood]           = useState<number>(5);
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   // Flow state
-  const [analyzing, setAnalyzing]           = useState(false);
-  const [result, setResult]                 = useState<AnalyzeResult | null>(null);
+  const [analyzing, setAnalyzing]             = useState(false);
+  const [result, setResult]                   = useState<AnalyzeResult | null>(null);
   const [crisisHelplines, setCrisisHelplines] = useState<Helpline[]>([]);
-  const [showChat, setShowChat]             = useState(false);
-  const [lastEntryText, setLastEntryText]   = useState('');
-  const [submitError, setSubmitError]       = useState<string | null>(null);
+  const [showChat, setShowChat]               = useState(false);
+  const [lastEntryText, setLastEntryText]     = useState('');
+  const [submitError, setSubmitError]         = useState<string | null>(null);
+
+  // Voice dictation
+  const stt = useSpeechToText();
+
+  // Append completed transcript to textarea
+  useEffect(() => {
+    if (!stt.listening && stt.transcript) {
+      setText((prev) => {
+        const spacer = prev && !prev.endsWith(' ') ? ' ' : '';
+        return (prev + spacer + stt.transcript).slice(0, CHAR_LIMIT);
+      });
+      stt.reset();
+    }
+  }, [stt.listening, stt.transcript, stt.reset]);
 
   const resetForm = () => {
     setResult(null);
@@ -83,9 +136,24 @@ export default function TodayTab({ exam, uid, getToken }: TodayTabProps) {
     setSubmitError(null);
 
     try {
-      const token = await getToken();
-      const body: Record<string, unknown> = { exam, entryText: trimmed, mood };
-      if (activeTag) body.recentContext = `Quick mood tag: ${activeTag}`;
+      const [token, recentContext] = await Promise.all([
+        getToken(),
+        buildRecentContext(uid),
+      ]);
+
+      const body: Record<string, unknown> = {
+        exam,
+        entryText: trimmed,
+        mood,
+      };
+
+      // Merge quick tag + history context
+      const contextParts: string[] = [];
+      if (activeTag) contextParts.push(`Quick mood tag: ${activeTag}`);
+      if (recentContext) contextParts.push(recentContext);
+      if (contextParts.length > 0) {
+        body.recentContext = contextParts.join(' ').slice(0, RECENT_CONTEXT_CHAR_LIMIT);
+      }
 
       const res = await fetch('/api/analyze', {
         method: 'POST',
@@ -126,6 +194,14 @@ export default function TodayTab({ exam, uid, getToken }: TodayTabProps) {
       );
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const handleVoiceToggle = () => {
+    if (stt.listening) {
+      stt.stop();
+    } else {
+      stt.start();
     }
   };
 
@@ -190,28 +266,61 @@ export default function TodayTab({ exam, uid, getToken }: TodayTabProps) {
             ))}
           </div>
 
-          {/* Textarea */}
+          {/* Textarea + mic button */}
           <div className="mb-4">
-            <textarea
-              id="journal-textarea"
-              value={text}
-              onChange={(e) => setText(e.target.value.slice(0, CHAR_LIMIT))}
-              placeholder="e.g. I bombed today's mock test and now my parents are asking about results again…"
-              rows={5}
-              className="w-full p-4 rounded-2xl resize-none"
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1.5px solid var(--bg-surface-2)',
-                color: 'var(--color-text)',
-                fontSize: '0.9375rem',
-                lineHeight: 1.6,
-                boxShadow: 'var(--shadow-card)',
-                outline: 'none',
-              }}
-              aria-label="Journal entry"
-              onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--color-brand)'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--bg-surface-2)'; }}
-            />
+            <div className="relative">
+              <textarea
+                id="journal-textarea"
+                value={text}
+                onChange={(e) => setText(e.target.value.slice(0, CHAR_LIMIT))}
+                placeholder="e.g. I bombed today's mock test and now my parents are asking about results again…"
+                rows={5}
+                className="w-full p-4 rounded-2xl resize-none"
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: '1.5px solid var(--bg-surface-2)',
+                  color: 'var(--color-text)',
+                  fontSize: '0.9375rem',
+                  lineHeight: 1.6,
+                  boxShadow: 'var(--shadow-card)',
+                  outline: 'none',
+                  paddingRight: stt.supported ? '3.5rem' : undefined,
+                }}
+                aria-label="Journal entry"
+                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--color-brand)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--bg-surface-2)'; }}
+              />
+
+              {/* Mic button — only shown when STT supported */}
+              {stt.supported && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '0.75rem',
+                    right: '0.75rem',
+                  }}
+                >
+                  <VoiceButton
+                    listening={stt.listening}
+                    onToggle={handleVoiceToggle}
+                    label={stt.listening ? 'Stop voice input' : 'Dictate into journal'}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Live transcript hint */}
+            {stt.listening && stt.transcript && (
+              <p
+                className="text-xs mt-1 italic"
+                style={{ color: 'var(--color-text-muted)' }}
+                aria-live="polite"
+                aria-label="Live transcript"
+              >
+                {stt.transcript}
+              </p>
+            )}
+
             <p
               className="text-right text-xs mt-1"
               style={{ color: 'var(--color-text-muted)' }}
@@ -305,6 +414,7 @@ export default function TodayTab({ exam, uid, getToken }: TodayTabProps) {
             technique={result.technique}
             provider={result.provider}
             degraded={result.degraded}
+            uid={uid}
           />
 
           <button
