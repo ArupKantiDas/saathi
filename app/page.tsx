@@ -65,11 +65,5 @@ function AppRouter({ auth }: { auth: AuthState }) {
     );
   }
 
-  return (
-    <AppShell
-      exam={exam}
-      uid={auth.uid!}
-      getToken={auth.getToken}
-    />
-  );
+  return <AppShell exam={exam} auth={auth} />;
 }

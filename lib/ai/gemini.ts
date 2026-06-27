@@ -1,22 +1,23 @@
 /**
- * Google Gemini provider — FALLBACK LLM.
+ * Google Gemini provider (Generative Language API).
  *
- * Uses the Generative Language API (AI Studio) via a simple API key — free
- * tier, no billing, no service-account key, so it runs anywhere including
- * Vercel. Structured output uses responseMimeType: application/json with the
- * schema described in the system instruction; the result is still validated by
- * the same zod schema as Bedrock, so both providers are held to one contract.
+ * Model-parameterized so the orchestrator can fall through several Gemini
+ * models (e.g. 2.5-flash -> 2.5-flash-lite -> 2.0-flash) for genuine
+ * redundancy against a single model's transient errors or rate limits.
  *
- * thinkingBudget is set to 0 — gemini-2.5-flash otherwise spends its output
- * budget on hidden "thinking" tokens, which adds latency and can starve the
- * actual JSON response.
+ * thinkingBudget:0 is only sent to 2.5 models (older models reject the field) —
+ * it stops 2.5-flash from spending its output budget on hidden "thinking".
  */
-const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-
-function endpoint(): string {
+function endpoint(model: string): string {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('gemini: GEMINI_API_KEY not set');
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+}
+
+function genConfig(model: string, extra: Record<string, unknown>): Record<string, unknown> {
+  const cfg: Record<string, unknown> = { ...extra };
+  if (model.includes('2.5')) cfg.thinkingConfig = { thinkingBudget: 0 };
+  return cfg;
 }
 
 interface GeminiBody {
@@ -25,36 +26,28 @@ interface GeminiBody {
   generationConfig: Record<string, unknown>;
 }
 
-async function call(body: GeminiBody): Promise<string> {
-  const res = await fetch(endpoint(), {
+async function call(model: string, body: GeminiBody): Promise<string> {
+  const res = await fetch(endpoint(model), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(
-      `gemini: HTTP ${res.status} ${JSON.stringify(data).slice(0, 200)}`,
-    );
+    throw new Error(`gemini(${model}): HTTP ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
   }
-  const text: string | undefined =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) {
-    throw new Error(
-      `gemini: no text in response ${JSON.stringify(data).slice(0, 200)}`,
-    );
+    throw new Error(`gemini(${model}): no text ${JSON.stringify(data).slice(0, 160)}`);
   }
   return text;
 }
 
-export async function geminiStructured(args: {
-  system: string;
-  prompt: string;
-  schemaHint: string;
-  maxTokens?: number;
-  temperature?: number;
-}): Promise<unknown> {
-  const text = await call({
+export async function geminiStructured(
+  model: string,
+  args: { system: string; prompt: string; schemaHint: string; maxTokens?: number; temperature?: number },
+): Promise<unknown> {
+  const text = await call(model, {
     systemInstruction: {
       parts: [
         {
@@ -63,30 +56,26 @@ export async function geminiStructured(args: {
       ],
     },
     contents: [{ role: 'user', parts: [{ text: args.prompt }] }],
-    generationConfig: {
+    generationConfig: genConfig(model, {
       responseMimeType: 'application/json',
       temperature: args.temperature ?? 0.3,
       maxOutputTokens: args.maxTokens ?? 1024,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
+    }),
   });
   return JSON.parse(text);
 }
 
-export async function geminiText(args: {
-  system: string;
-  prompt: string;
-  maxTokens?: number;
-  temperature?: number;
-}): Promise<string> {
-  const text = await call({
+export async function geminiText(
+  model: string,
+  args: { system: string; prompt: string; maxTokens?: number; temperature?: number },
+): Promise<string> {
+  const text = await call(model, {
     systemInstruction: { parts: [{ text: args.system }] },
     contents: [{ role: 'user', parts: [{ text: args.prompt }] }],
-    generationConfig: {
+    generationConfig: genConfig(model, {
       temperature: args.temperature ?? 0.6,
       maxOutputTokens: args.maxTokens ?? 700,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
+    }),
   });
   return text.trim();
 }
