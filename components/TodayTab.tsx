@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import AnalysisCard from './AnalysisCard';
 import AnalysisSkeleton from './AnalysisSkeleton';
+import BioSignal from './BioSignal';
 import CrisisBanner from './CrisisBanner';
 import VoiceButton from './VoiceButton';
 import Chat from './Chat';
@@ -392,6 +393,9 @@ export default function TodayTab({ exam, uid, getToken }: TodayTabProps) {
           </button>
         </div>
       )}
+
+      {/* ── Wearable simulator ── */}
+      <BioSignal exam={exam} getToken={getToken} />
 
       {/* ── Skeleton while analyzing ── */}
       {analyzing && <AnalysisSkeleton />}
