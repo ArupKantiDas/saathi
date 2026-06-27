@@ -19,7 +19,7 @@ A generic version of this is a chatbot plus a mood slider. Saathi's wedge — al
 
 ## How it works, end to end
 
-1. **Sign in** — anonymous Firebase auth (no signup wall), upgradeable to Google.
+1. **Sign in** — anonymous Firebase auth (no signup wall); optionally create an email/password account, which links the anonymous session so existing journal entries carry over.
 2. **Journal** — the student writes or speaks an entry and rates their mood.
 3. **Analyze** (`POST /api/analyze`) — one structured LLM call returns: detected mood, named entities, stress triggers (from a fixed taxonomy), themes, a crisis assessment, a grounded coping technique, an optional reframe, and a warm message.
 4. **Safety gate** — a deterministic keyword screen runs alongside the model's crisis assessment. If *either* fires, normal coaching is suppressed and verified helplines are shown.
@@ -36,7 +36,7 @@ A generic version of this is a chatbot plus a mood slider. Saathi's wedge — al
 
 This is treated as the highest-stakes requirement.
 
-- **Structured output, both providers.** The journal analysis is constrained to a fixed schema (Bedrock tool-use / Gemini JSON mode) and validated with the same zod schema regardless of provider. Off-contract output is rejected, not shown.
+- **Structured output, validated.** The journal analysis is constrained to a fixed schema (Gemini JSON mode / Bedrock tool-use) and validated with the same zod schema regardless of which model answered. Off-contract output is rejected, not shown.
 - **Grounded advice.** Coping techniques come from a curated library with cited sources; the model can only pick an existing technique id, and the server falls back to a deterministic pick if the id is unknown.
 - **Fail-safe crisis detection.** A deterministic phrase screen is the floor; combined with the model via OR, severity via MAX. It errs toward showing help. Helpline numbers are verified against official sources and hardcoded — never generated.
 - **No mock data.** When both LLMs fail, the app shows a clearly-labelled offline grounded technique — never a fabricated "AI" answer. The live provider is shown as a badge in the UI for transparency.
@@ -63,7 +63,7 @@ Mobile-first and calm by design (a stressed student on a phone, not a reviewer o
 
 ## Tech stack
 
-Next.js (App Router) · TypeScript · Tailwind CSS · Firebase Auth + Firestore · Google Gemini (primary LLM) · AWS Bedrock / Claude (fallback LLM) · zod · vitest.
+Next.js (App Router) · TypeScript · Tailwind CSS · Firebase Auth (anonymous + email/password) + Firestore · Google Gemini (multi-model fallback chain: 2.5-flash → 2.5-flash-lite → flash-latest) · AWS Bedrock / Claude (optional cross-cloud fallback, env-gated) · zod · vitest.
 
 ---
 

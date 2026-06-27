@@ -9,16 +9,20 @@ A short, honest map of every place GenAI is used in Saathi, and how each is kept
   app code  │  generateStructured() / generateText()      │   lib/ai/generate.ts
             └─────────────────────────────────────────────┘
                               │
-              1. Gemini (primary)  ── lib/ai/gemini.ts   (Generative Language API, free tier)
-                              │  on error / 15s timeout
-              2. Bedrock (fallback) ── lib/ai/bedrock.ts (Claude via Converse, different cloud + family)
-                              │  on error / 15s timeout
-              3. degraded: true  → caller shows a clearly-labelled OFFLINE grounded technique
+   Gemini model chain ── lib/ai/gemini.ts (Generative Language API, free tier)
+     1. gemini-2.5-flash        ┐ each on error / 15s timeout falls to the next.
+     2. gemini-2.5-flash-lite   │ flash and flash-lite are SEPARATE quota buckets,
+     3. gemini-flash-latest     ┘ so a rate limit on one is survived by another.
+                              │  all Gemini models failed
+   (optional) Bedrock ── lib/ai/bedrock.ts (Claude via Converse) — only if
+                              │  BEDROCK_ENABLED=true (account-gated, see note)
+                              │
+   degraded: true  → caller shows a clearly-labelled OFFLINE grounded technique
 ```
 
-Every call returns which provider answered. The UI shows it as a badge, so a reviewer can see the answer came from a real model, not a fixture. The same `zod` schema validates structured output from **both** providers, so a provider that drifts off-contract is treated as a failure rather than passed through to a vulnerable user.
+The model chain is configurable via `GEMINI_MODELS`. Every call returns which model answered; the UI shows it as a badge, so a reviewer can see the answer came from a real model, not a fixture. The same `zod` schema validates structured output regardless of which model answered, so anything off-contract is treated as a failure rather than passed to a vulnerable user.
 
-> Note on providers: Gemini is primary because the AWS account currently needs the Anthropic "use-case details" form approved before Claude can be invoked on Bedrock. The Bedrock path is fully wired and becomes a live second-cloud fallback the moment that form is approved — no code change.
+> Note on Bedrock: the cross-cloud Claude fallback is fully wired but disabled by default (`BEDROCK_ENABLED` unset) because this AWS account still needs the Anthropic "use-case details" form approved before Claude can be invoked. Multiple Gemini models give real redundancy today; flipping the flag adds a second cloud the moment the form clears, with no code change.
 
 ## Where GenAI is used
 
