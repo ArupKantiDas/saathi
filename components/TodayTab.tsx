@@ -8,6 +8,7 @@ import CrisisBanner from './CrisisBanner';
 import VoiceButton from './VoiceButton';
 import Chat from './Chat';
 import { addEntry, listEntries, topHelpfulTechniqueIds } from '@/lib/store';
+import RecentEntries from './RecentEntries';
 import { useSpeechToText } from '@/lib/voice/useSpeech';
 import { getTechnique } from '@/lib/knowledge/techniques';
 import type { Analysis } from '@/lib/ai/schemas';
@@ -396,6 +397,9 @@ export default function TodayTab({ exam, uid, getToken }: TodayTabProps) {
 
       {/* ── Wearable simulator ── */}
       <BioSignal exam={exam} getToken={getToken} />
+
+      {/* ── Saved journal history (proves persistence across logins) ── */}
+      <RecentEntries uid={uid} reloadKey={result ? 1 : 0} />
 
       {/* ── Skeleton while analyzing ── */}
       {analyzing && <AnalysisSkeleton />}

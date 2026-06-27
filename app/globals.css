@@ -140,3 +140,19 @@ body {
 .breathe-circle {
   animation: breathe 4s ease-in-out infinite;
 }
+
+/* Interactive affordance: clickable elements show the hand cursor. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="radio"],
+a[href],
+label[for],
+select,
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}

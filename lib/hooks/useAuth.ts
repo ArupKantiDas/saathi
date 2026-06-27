@@ -20,6 +20,8 @@ export interface AuthState {
   isAnonymous: boolean;
   loading: boolean;
   getToken: () => Promise<string>;
+  /** Start an anonymous session (no account, frictionless). */
+  continueAsGuest: () => Promise<void>;
   /** Create an account. If currently anonymous, links so journal data is kept. */
   signUp: (email: string, password: string) => Promise<void>;
   /** Sign in to an existing account. */
@@ -42,21 +44,17 @@ export function useAuth(): AuthState {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        setLoading(false);
-      } else {
-        try {
-          await signInAnonymously(auth);
-          // onAuthStateChanged fires again with the new anonymous user.
-        } catch (err) {
-          console.error('Anonymous sign-in failed:', err);
-          setLoading(false);
-        }
-      }
+      // No auto sign-in: a null user means the login wall should show.
+      setUser(firebaseUser);
+      setLoading(false);
     });
     return unsubscribe;
   }, []);
+
+  const continueAsGuest = async (): Promise<void> => {
+    await signInAnonymously(auth);
+    // onAuthStateChanged fires with the new anonymous user.
+  };
 
   const getToken = async (): Promise<string> => {
     if (!auth.currentUser) return '';
@@ -92,6 +90,7 @@ export function useAuth(): AuthState {
     isAnonymous: user?.isAnonymous ?? false,
     loading,
     getToken,
+    continueAsGuest,
     signUp,
     signIn,
     signOutUser,

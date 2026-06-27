@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth, AuthState } from '@/lib/hooks/useAuth';
+import LoginScreen from './LoginScreen';
 
 interface AuthGateProps {
   children: (auth: AuthState) => React.ReactNode;
@@ -37,6 +38,11 @@ export default function AuthGate({ children }: AuthGateProps) {
         </p>
       </div>
     );
+  }
+
+  // Login wall: until someone signs in (or chooses guest), gate the app.
+  if (!authState.user) {
+    return <LoginScreen auth={authState} />;
   }
 
   return <>{children(authState)}</>;
