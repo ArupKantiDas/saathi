@@ -55,7 +55,8 @@ export async function bedrockStructured(
               name: 'respond',
               description:
                 'Return the analysis strictly using this schema. Do not add fields.',
-              inputSchema: { json: args.jsonSchema },
+              // Cast: our JSON Schema object IS the SDK's DocumentType at runtime.
+              inputSchema: { json: args.jsonSchema as unknown as never },
             },
           },
         ],
